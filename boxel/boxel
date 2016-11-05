@@ -1,0 +1,234 @@
+#!/usr/bin/python
+
+import sys, random
+import pygame
+from pygame.locals import *
+
+images = {}
+images['blue'] = pygame.image.load("graphics/blue.png")
+images['green'] = pygame.image.load("graphics/green.png")
+images['red'] = pygame.image.load("graphics/red.png")
+images['yellow'] = pygame.image.load("graphics/yellow.png")
+
+blocks = []
+ship_blocks = []
+
+def zap(position, zapped):
+    x = position[0]
+    y = position[1]
+
+    if position in zapped:
+        return
+
+    zapped.append(position)
+    color = blocks[x][y].get_color()
+    if x > 0 and len(blocks[x-1]) > y \
+    and color == blocks[x-1][y].get_color():
+        zap((x - 1, y), zapped)
+    if x < (len(blocks) - 1) and len(blocks[x+1]) > y \
+    and color == blocks[x+1][y].get_color():
+        zap((x + 1, y), zapped)
+
+    if y > 0 and color == blocks[x][y-1].get_color():
+        zap((x, y - 1), zapped)
+    if y < (len(blocks[x]) - 1) and color == blocks[x][y+1].get_color():
+        zap((x, y + 1), zapped)
+
+class Block(pygame.sprite.Sprite):
+    colors = ('blue', 'green', 'red', 'yellow')
+
+    def __init__(self, position = (0, 0), color = 'random'):
+        pygame.sprite.Sprite.__init__(self)
+        if color == 'random':
+            color = self.colors[random.randint(0, 3)]
+        self.color = color
+        self.image = images[color]
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (position[0] * 75 + 20, position[1] * 30)
+        self.next_update_time = 0
+        self.vertical_goal = self.rect.top
+        self.horizontal_goal = self.rect.left
+        self.x_position = position[0]
+        self.y_position = position[1]
+
+    def move_right(self):
+        if self.x_position < 7:
+            self.x_position = self.x_position + 1
+        self.horizontal_goal = self.x_position * 75 + 20
+
+    def move_left(self):
+        if self.x_position > 0:
+            self.x_position = self.x_position - 1
+        self.horizontal_goal = self.x_position * 75 + 20
+
+    def move_down(self):
+        self.y_position = self.y_position + 1
+        self.vertical_goal = self.y_position * 30
+
+    def move_up(self):
+        self.y_position = self.y_position - 1
+        if self.y_position < 0:
+            self.y_position = 0
+        self.vertical_goal = self.y_position * 30
+
+    def set_position(self, position):
+        self.x_position = position[0]
+        self.y_position = position[1]
+        self.horizontal_goal = self.x_position * 75 + 20
+        self.vertical_goal = self.y_position * 30
+
+    def get_color(self):
+        return self.color
+
+    def update(self, current_time):
+        if self.next_update_time < current_time:
+            # Do some moving sutff
+            #
+            if self.vertical_goal < self.rect.top:
+                self.rect.move_ip(0, -30)
+            elif self.vertical_goal > self.rect.top:
+                self.rect.move_ip(0, 30)
+
+            if self.horizontal_goal < self.rect.left:
+                self.rect.move_ip(-5, 0)
+            elif self.horizontal_goal > self.rect.left:
+                self.rect.move_ip(5, 0)
+
+            self.next_update_time = current_time + 10
+
+class Ship(pygame.sprite.Sprite):
+
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load("graphics/ship.png")
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (20, 360)
+        self.next_update_time = 0
+        self.move_goal = self.rect.left
+        self.position = 0
+
+    def get_position(self):
+        return self.position
+
+    def move_right(self):
+        if self.position < 7:
+            self.position = self.position + 1
+        self.move_goal = self.position * 75 + 20
+
+    def move_left(self):
+        if self.position > 0:
+            self.position = self.position - 1
+        self.move_goal = self.position * 75 + 20
+
+    def update(self, current_time):
+        if self.next_update_time < current_time:
+            # Do some moving sutff
+
+            if self.move_goal < self.rect.left:
+                self.rect.move_ip(-5, 0)
+            elif self.move_goal > self.rect.left:
+                self.rect.move_ip(5, 0)
+
+            self.next_update_time = current_time + 10
+
+pygame.init()
+sprites = pygame.sprite.RenderUpdates()
+
+screen = pygame.display.set_mode([640, 480])
+pygame.display.set_caption('Feh')
+
+background = pygame.image.load("graphics/background.png")
+
+ship = Ship()
+
+sprites.add(ship)
+
+for i in range(0, 8):
+    blocks.append([])
+    for j in range(0, 5):
+        blocks[i].append(Block((i, j)))
+        sprites.add(blocks[i][j])
+
+screen.blit(background, (0, 0))
+pygame.display.flip()
+pygame.key.set_repeat(500, 30)
+
+next_update = pygame.time.get_ticks() + 1000
+
+while 1:
+    sprites.update(pygame.time.get_ticks())
+    rectlist = sprites.draw(screen)
+    pygame.display.update(rectlist)
+    sprites.clear(screen, background)
+
+    if next_update < pygame.time.get_ticks():
+        next_update = pygame.time.get_ticks() + 10000
+        count = 0
+        for i in blocks:
+            for j in i:
+                j.move_down()
+            new_block = Block((count, 0))
+            count = count + 1
+            i.insert(0, new_block)
+            sprites.add(new_block)
+
+    event = pygame.event.poll()
+    if event.type == QUIT:
+        sys.exit(0)
+    elif event.type == KEYDOWN:
+        if event.key == K_ESCAPE:
+            sys.exit(0)
+        elif event.key == K_LEFT:
+            ship.move_left()
+            for i in ship_blocks:
+                i.move_left()
+        elif event.key == K_RIGHT:
+            ship.move_right()
+            for i in ship_blocks:
+                i.move_right()
+        elif event.key == K_SPACE:
+            # Move the blocks somehow
+            pos = ship.get_position()
+
+            if len(ship_blocks) < 4 \
+            and len(blocks[pos]) > 0:
+                block = blocks[pos][-1]
+
+                while ((len(ship_blocks) == 0 \
+                or block.get_color() == ship_blocks[-1].get_color()) \
+                and len(ship_blocks) < 4):
+
+                    ship_blocks.append(block)
+                    del(blocks[pos][-1])
+                    block.vertical_goal = 360 - 30 * len(ship_blocks)
+                    if len(blocks[pos]) == 0:
+                        break
+                    block = blocks[pos][-1]
+
+        elif event.key == K_LALT:
+            # Return the blocks
+            pos = ship.get_position()
+            for i in ship_blocks:
+                blocks[pos].append(i)
+                i.set_position((pos, len(blocks[pos]) - 1))
+            ship_blocks = []
+
+            # whack
+            zapped = []
+            zap((pos, len(blocks[pos]) - 1), zapped)
+            if len(zapped) >= 4:
+                for i in zapped:
+                    x = i[0]
+                    y = i[1]
+                    sprites.remove(blocks[x][y])
+                    if len(blocks[x]) > y:
+                        for j in blocks[x][y:]:
+                            j.move_up()
+                # We can't delete blocks until we're done moving things
+                # around (bad thing happen otherwise)
+                zapped.sort()
+                zapped.reverse()
+                for i in zapped:
+                    x = i[0]
+                    y = i[1]
+                    del(blocks[x][y])
